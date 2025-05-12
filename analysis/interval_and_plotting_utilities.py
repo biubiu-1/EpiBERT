@@ -111,6 +111,7 @@ def return_bg_interval(atac_bedgraph, chrom, interval_start, interval_end, num_b
 
     Return tf.Tensor: Binned and summed ATAC-seq signal as a TensorFlow constant.
     """
+
     interval_str = '\t'.join([chrom, str(interval_start), str(interval_end)])
     interval_bed = pybt.BedTool(interval_str, from_string=True)
     interval = interval_bed[0]
@@ -925,46 +926,67 @@ def parse_var_long(variant):
 
 
 def parse_gtf_collapsed(gtf_file, chromosome, start, end):
-    """
-    Parses GTF file for exons in a region and returns collapsed exon info.
-    """
     genes = {}
     with open(gtf_file, 'r') as f:
         for line in f:
-            if line.startswith("#"): continue
+            if line.startswith("#"):
+                continue
             columns = line.strip().split("\t")
-            if len(columns) < 9: continue
-            if columns[0] != chromosome: continue
-            f_start, f_end = int(columns[3]), int(columns[4])
-            if f_end < start or f_start > end: continue
+            if len(columns) < 9:
+                continue
+            feature_type = columns[2]
+            chrom = columns[0]
+            feature_start = int(columns[3])
+            feature_end = int(columns[4])
+            if chrom != chromosome or feature_end < start or feature_start > end:
+                continue
 
-            attrs = dict(
-                (kv.split(' ')[0], kv.split(' ')[1].strip('"'))
-                for kv in columns[8].split(';') if kv.strip() and ' ' in kv
-            )
-            gene_name = attrs.get("gene_name", "NA")
-            if columns[2] == "exon":
-                gene = genes.setdefault(gene_name, {"start": f_start, "end": f_end, "exons": []})
-                gene["start"] = min(gene["start"], f_start)
-                gene["end"] = max(gene["end"], f_end)
-                gene["exons"].append((f_start, f_end))
+            # Parse attributes in the 9th column
+            attributes = {}
+            for attr in columns[8].split(';'):
+                attr = attr.strip()
+                if attr:
+                    parts = attr.split(' ', 1)
+                    if len(parts) == 2:
+                        key, value = parts
+                        attributes[key.strip()] = value.strip('"')
 
+            gene_name = attributes.get("gene_name", "NA")
+
+            if feature_type == "exon":
+                if gene_name not in genes:
+                    genes[gene_name] = {
+                        "start": feature_start,
+                        "end": feature_end,
+                        "exons": [],
+                    }
+                # Extend the gene's range
+                genes[gene_name]["start"] = min(genes[gene_name]["start"], feature_start)
+                genes[gene_name]["end"] = max(genes[gene_name]["end"], feature_end)
+                # Add the exon
+                genes[gene_name]["exons"].append((feature_start, feature_end))
+
+    # Merge overlapping exons for each gene
     for gene in genes.values():
         gene["exons"] = merge_intervals(gene["exons"])
+
     return genes
 
 
 def merge_intervals(intervals):
     """Merge overlapping intervals."""
-    if not intervals: return []
+    if not intervals:
+        return []
+    # Sort intervals by start position
     intervals.sort(key=lambda x: x[0])
     merged = [intervals[0]]
-    for curr in intervals[1:]:
-        last = merged[-1]
-        if curr[0] <= last[1]:
-            merged[-1] = (last[0], max(last[1], curr[1]))
+    for current_start, current_end in intervals[1:]:
+        last_start, last_end = merged[-1]
+        if current_start <= last_end:
+            # Merge intervals
+            merged[-1] = (last_start, max(last_end, current_end))
         else:
-            merged.append(curr)
+            merged.append((current_start, current_end))
     return merged
 
 
@@ -972,36 +994,52 @@ def plot_collapsed_gene_track(ax, genes, start, end, chromosome):
     """
     Plots collapsed gene structures on a Matplotlib axis.
     """
-    y = 0
-    for gene_name, data in genes.items():
-        ax.plot([data["start"], data["end"]], [y, y], color="black", linewidth=1)
-        for exon_start, exon_end in data["exons"]:
-            ax.add_patch(plt.Rectangle((exon_start, y - 0.2), exon_end - exon_start, 0.4, color="blue", alpha=0.7))
-        ax.text((data["start"] + data["end"]) / 2, y + 0.4, gene_name, fontsize=10,
-                ha="center", va="bottom", color="black")
-        y -= 1
+    y = 0  # Track height for stacking genes
+    for gene_name, gene_data in genes.items():
+        # Plot the entire gene range
+        ax.plot([gene_data["start"], gene_data["end"]], [y, y], color="black", linewidth=1)
+        # Plot each merged exon
+        for exon_start, exon_end in gene_data["exons"]:
+            ax.add_patch(plt.Rectangle(
+                (exon_start, y - 0.2), exon_end - exon_start, 0.4, color="blue", alpha=0.7
+            ))
+        # Add gene name with larger font size
+        ax.text((gene_data["start"] + gene_data["end"]) / 2, y + 0.4,
+                gene_name, fontsize=10, ha="center", va="bottom", color="black")
+        y -= 1  # Move to the next track
 
     ax.set_xlim(start, end)
     ax.set_ylim(y, 1)
-    ax.set_yticks([])
-    for side in ['top', 'right', 'left', 'bottom']:
-        ax.spines[side].set_visible(False)
-
+    ax.set_yticks([])  # Remove y-axis ticks and labels
+    ax.spines['top'].set_visible(False)  # Remove the top border
+    ax.spines['right'].set_visible(False)  # Remove the right border
+    ax.spines['left'].set_visible(False)  # Remove the left border
+    ax.spines['bottom'].set_visible(False)  # Remove the bottom border
 
 def plot_tracks_with_genes(tracks, gtf_file, interval, y_lim, height=1.5):
     """
     Plots tracks along with a collapsed gene model from a GTF.
     """
-    chromosome, start, end = interval
+    chromosome,start,end=interval
+    # Parse the GTF file to extract collapsed genes
     genes = parse_gtf_collapsed(gtf_file, chromosome, start, end)
+
+    # Create subplots
     fig, axes = plt.subplots(len(tracks) + 1, 1, figsize=(24, height * (len(tracks) + 1)), sharex=True)
-    plot_collapsed_gene_track(axes[0], genes, start, end, chromosome)
+
+    # Plot collapsed gene track
+    plot_collapsed_gene_track(axes[0], genes, start, end,chromosome)
+
+    # Plot other tracks
     for ax, (title, y) in zip(axes[1:], tracks.items()):
         ax.fill_between(np.linspace(start, end, num=len(y[0])), y[0], color=y[1])
         ax.set_title(title)
         ax.set_ylim((0, y_lim))
+
+    # Add chromosome label at the bottom of the whole figure
     label = f"{chromosome}: {start} - {end}"
-    fig.text(0.5, -0.05, label, ha="center", va="center", fontsize=12)
+    fig.text(0.5, -0.05, label, ha="center", va="center", fontsize=12, color="black")
+
     plt.tight_layout()
     plt.show()
 
