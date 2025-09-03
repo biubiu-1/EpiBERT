@@ -1,0 +1,94 @@
+# EpiBERT Training Configuration for Multi-Sample Datasets
+# Configuration for training with paired ATAC-seq and RAMPAGE-seq samples
+
+# Data Configuration
+train_data: "example_usage/multi_sample_manifest.yaml"
+valid_data: ""  # Validation data specified in manifest
+test_data: ""   # Test data specified in manifest
+
+# Model Configuration
+model_type: "pretraining"  # or "finetuning"
+
+# Training Parameters
+batch_size: 8
+learning_rate: 0.0001
+max_epochs: 100
+patience: 15
+gradient_clip_val: 1.0
+
+# Data Loading Parameters
+num_workers: 4
+pin_memory: true
+
+# Multi-Sample Data Parameters
+use_paired_dataset: true
+balance_conditions: true
+use_condition_sampler: true
+max_samples_per_condition: 100
+cache_size: 50
+
+# Data Augmentation
+augment_data: true
+max_shift: 4
+atac_mask_dropout: 0.15
+mask_size: 1536
+
+# Model Architecture (will be auto-configured based on model_type)
+# Pretraining: 8 heads, 8 layers, dropout=0.20, pointwise_dropout=0.10
+# Finetuning: 4 heads, 7 layers, dropout=0.2, pointwise_dropout=0.2
+
+# Sequence and Profile Lengths
+input_length: 524288   # DNA sequence length
+output_length: 4096    # ATAC/RAMPAGE profile length
+resolution: 128        # Base pairs per profile bin
+
+# Hardware Configuration
+num_gpus: 1
+precision: "bf16"      # Use mixed precision for efficiency
+
+# Logging and Checkpointing
+wandb_project: "epibert_multi_sample"
+wandb_entity: ""       # Set to your W&B entity
+log_every_n_steps: 100
+val_check_interval: 0.25
+check_val_every_n_epoch: 1
+
+# Checkpointing
+save_top_k: 3
+monitor: "val_loss"
+mode: "min"
+save_last: true
+
+# Early Stopping
+enable_early_stopping: true
+early_stopping_patience: 15
+early_stopping_monitor: "val_loss"
+early_stopping_mode: "min"
+min_delta: 0.001
+
+# Optimization
+optimizer: "adam"
+weight_decay: 0.01
+warmup_steps: 1000
+lr_scheduler: "cosine"
+lr_scheduler_params:
+  T_max: 100000
+  eta_min: 0.00001
+
+# Advanced Training Options
+accumulate_grad_batches: 1
+auto_lr_find: false
+auto_scale_batch_size: false
+deterministic: false
+
+# Output Configuration
+output_dir: "models/multi_sample_training"
+experiment_name: "epibert_paired_samples"
+version: "v1"
+
+# Reproducibility
+seed: 42
+workers_seed_all: true
+
+# Profiling (for debugging)
+profiler: null  # Set to "simple", "advanced", or "pytorch" for profiling

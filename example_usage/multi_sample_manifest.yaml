@@ -1,0 +1,148 @@
+# Example Sample Manifest for EpiBERT Multi-Sample Training
+# This file defines multiple paired ATAC-seq and RAMPAGE-seq samples
+# for batch training with condition balancing
+
+samples:
+  # K562 Control Samples
+  - sample_id: "K562_ctrl_rep1"
+    condition: "control"
+    cell_type: "K562"
+    atac_file: "/data/epibert/K562_ctrl_rep1_atac.h5"
+    rampage_file: "/data/epibert/K562_ctrl_rep1_rampage.h5"
+    batch: "train"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-15"
+      batch_id: "batch_001"
+      
+  - sample_id: "K562_ctrl_rep2"
+    condition: "control"
+    cell_type: "K562"
+    atac_file: "/data/epibert/K562_ctrl_rep2_atac.h5"
+    rampage_file: "/data/epibert/K562_ctrl_rep2_rampage.h5"
+    batch: "train"
+    replicate: 2
+    additional_metadata:
+      experiment_date: "2024-01-15"
+      batch_id: "batch_001"
+
+  # K562 Treatment Samples
+  - sample_id: "K562_treat_rep1"
+    condition: "treatment"
+    cell_type: "K562"
+    atac_file: "/data/epibert/K562_treat_rep1_atac.h5"
+    rampage_file: "/data/epibert/K562_treat_rep1_rampage.h5"
+    batch: "train"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-16"
+      treatment: "doxorubicin_100nM"
+      batch_id: "batch_002"
+      
+  - sample_id: "K562_treat_rep2"
+    condition: "treatment"
+    cell_type: "K562"
+    atac_file: "/data/epibert/K562_treat_rep2_atac.h5"
+    rampage_file: "/data/epibert/K562_treat_rep2_rampage.h5"
+    batch: "train"
+    replicate: 2
+    additional_metadata:
+      experiment_date: "2024-01-16"
+      treatment: "doxorubicin_100nM"
+      batch_id: "batch_002"
+
+  # GM12878 Control Samples
+  - sample_id: "GM12878_ctrl_rep1"
+    condition: "control"
+    cell_type: "GM12878"
+    atac_file: "/data/epibert/GM12878_ctrl_rep1_atac.h5"
+    rampage_file: "/data/epibert/GM12878_ctrl_rep1_rampage.h5"
+    batch: "train"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-17"
+      batch_id: "batch_003"
+      
+  - sample_id: "GM12878_ctrl_rep2"
+    condition: "control"
+    cell_type: "GM12878"
+    atac_file: "/data/epibert/GM12878_ctrl_rep2_atac.h5"
+    rampage_file: "/data/epibert/GM12878_ctrl_rep2_rampage.h5"
+    batch: "train"
+    replicate: 2
+    additional_metadata:
+      experiment_date: "2024-01-17"
+      batch_id: "batch_003"
+
+  # GM12878 Treatment Samples
+  - sample_id: "GM12878_treat_rep1"
+    condition: "treatment"
+    cell_type: "GM12878"
+    atac_file: "/data/epibert/GM12878_treat_rep1_atac.h5"
+    rampage_file: "/data/epibert/GM12878_treat_rep1_rampage.h5"
+    batch: "train"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-18"
+      treatment: "doxorubicin_100nM"
+      batch_id: "batch_004"
+      
+  - sample_id: "GM12878_treat_rep2"
+    condition: "treatment"
+    cell_type: "GM12878"
+    atac_file: "/data/epibert/GM12878_treat_rep2_atac.h5"
+    rampage_file: "/data/epibert/GM12878_treat_rep2_rampage.h5"
+    batch: "train"
+    replicate: 2
+    additional_metadata:
+      experiment_date: "2024-01-18"
+      treatment: "doxorubicin_100nM"
+      batch_id: "batch_004"
+
+  # Validation Samples
+  - sample_id: "K562_val_ctrl"
+    condition: "control"
+    cell_type: "K562"
+    atac_file: "/data/epibert/K562_val_ctrl_atac.h5"
+    rampage_file: "/data/epibert/K562_val_ctrl_rampage.h5"
+    batch: "val"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-20"
+      batch_id: "validation_batch"
+      
+  - sample_id: "K562_val_treat"
+    condition: "treatment"
+    cell_type: "K562"
+    atac_file: "/data/epibert/K562_val_treat_atac.h5"
+    rampage_file: "/data/epibert/K562_val_treat_rampage.h5"
+    batch: "val"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-20"
+      treatment: "doxorubicin_100nM"
+      batch_id: "validation_batch"
+
+  # Test Samples
+  - sample_id: "GM12878_test_ctrl"
+    condition: "control"
+    cell_type: "GM12878"
+    atac_file: "/data/epibert/GM12878_test_ctrl_atac.h5"
+    rampage_file: "/data/epibert/GM12878_test_ctrl_rampage.h5"
+    batch: "test"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-22"
+      batch_id: "test_batch"
+      
+  - sample_id: "GM12878_test_treat"
+    condition: "treatment"
+    cell_type: "GM12878"
+    atac_file: "/data/epibert/GM12878_test_treat_atac.h5"
+    rampage_file: "/data/epibert/GM12878_test_treat_rampage.h5"
+    batch: "test"
+    replicate: 1
+    additional_metadata:
+      experiment_date: "2024-01-22"
+      treatment: "doxorubicin_100nM"
+      batch_id: "test_batch"

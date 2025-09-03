@@ -3,16 +3,27 @@ EpiBERT PyTorch Lightning Data Module
 
 Provides PyTorch DataLoader format for EpiBERT training with Lightning.
 Supports HDF5, numpy, and other standard formats for genomic data.
+
+Enhanced to support both single-sample and multi-sample paired datasets.
 """
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, Union
 import numpy as np
 import h5py
 import pandas as pd
 from pathlib import Path
+import warnings
+
+# Import enhanced paired data module
+try:
+    from .paired_data_module import PairedDataModule, PairedSampleDataset
+    PAIRED_MODULE_AVAILABLE = True
+except ImportError:
+    PAIRED_MODULE_AVAILABLE = False
+    warnings.warn("Paired data module not available. Only single-sample datasets supported.")
 
 
 class EpiBERTDataset(Dataset):
@@ -403,17 +414,48 @@ class EpiBERTDataModule(pl.LightningDataModule):
         )
 
 
-def create_data_module(data_dir: str, 
+def create_data_module(data_dir: Optional[str] = None,
+                      manifest_file: Optional[str] = None,
                       batch_size: int = 8,
                       num_workers: int = 4,
-                      **kwargs) -> EpiBERTDataModule:
-    """Factory function to create data module"""
-    return EpiBERTDataModule(
-        data_dir=data_dir,
-        batch_size=batch_size, 
-        num_workers=num_workers,
-        **kwargs
-    )
+                      use_paired_dataset: bool = False,
+                      **kwargs) -> Union[EpiBERTDataModule, 'PairedDataModule']:
+    """
+    Factory function to create data module
+    
+    Args:
+        data_dir: Directory containing data files (for single-sample dataset)
+        manifest_file: Manifest file for paired multi-sample dataset
+        batch_size: Batch size for training
+        num_workers: Number of data loading workers
+        use_paired_dataset: Whether to use paired dataset module
+        **kwargs: Additional arguments
+        
+    Returns:
+        Data module instance (EpiBERTDataModule or PairedDataModule)
+    """
+    
+    # Determine which module to use
+    if use_paired_dataset or manifest_file:
+        if not PAIRED_MODULE_AVAILABLE:
+            raise ImportError("Paired data module not available. Install required dependencies.")
+        if not manifest_file:
+            raise ValueError("manifest_file required for paired dataset")
+        return PairedDataModule(
+            manifest_file=manifest_file,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            **kwargs
+        )
+    else:
+        if not data_dir:
+            raise ValueError("data_dir required for single-sample dataset")
+        return EpiBERTDataModule(
+            data_dir=data_dir,
+            batch_size=batch_size, 
+            num_workers=num_workers,
+            **kwargs
+        )
 
 
 # Data conversion utilities for various genomic data formats
