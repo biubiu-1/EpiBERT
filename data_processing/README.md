@@ -12,27 +12,106 @@ data_processing/
 ├── create_signal_tracks/        # Convert BAM files to signal tracks  
 ├── downloading_utilities/       # Download utilities from GEO/ENCODE
 ├── motif_enrichment/           # Motif enrichment analysis
-└── write_TF_records/           # Create training datasets
+├── write_TF_records/           # Create training datasets
+├── run_pipeline.sh             # Master pipeline script
+└── example_config.yaml         # Example configuration file
 ```
+
+## Quick Start
+
+For most users, the easiest way to process data is using the master pipeline script:
+
+```bash
+# 1. Create a configuration file (see example_config.yaml)
+cp example_config.yaml my_config.yaml
+# Edit my_config.yaml with your file paths
+
+# 2. Run the complete pipeline
+./run_pipeline.sh -c my_config.yaml
+
+# 3. Or run specific steps
+./run_pipeline.sh -c my_config.yaml -s atac    # ATAC-seq only
+./run_pipeline.sh -c my_config.yaml -s peaks   # Peak calling only
+```
+
+## Individual Scripts (General Use)
+
+All workflows have been converted from WDL to standalone bash scripts for broader accessibility:
 
 ## 1. Data Download (`downloading_utilities/`)
 
-Tools for downloading raw genomic data:
-- Download FASTQ files from GEO
-- Download processed BAM files from ENCODE
-- Batch download utilities
+### ENCODE BAM Download
+```bash
+./downloading_utilities/encode_bam_download.sh \
+  -a ENCFF123ABC,ENCFF456DEF \
+  -s sample1 \
+  -t ATAC-seq \
+  -o output_dir
+```
 
-## 2. Alignment and Peak Calling (`alignment_and_peak_call/`)
+### SRA FASTQ Download
+```bash
+./downloading_utilities/sra_fastq_download.sh \
+  -s SRR123456,SRR789012 \
+  -o output_dir \
+  -j 4
+```
 
-ATAC-seq processing pipeline:
-- Align FASTQ files to reference genome
-- Peak calling using MACS2
-- Quality control and filtering
-- Fragment file generation
+## 2. Signal Track Creation (`create_signal_tracks/`)
 
-## 3. Signal Track Creation (`create_signal_tracks/`)
+### ATAC-seq BAM to Fragments
+```bash
+./create_signal_tracks/bam_to_bed_ATAC.sh \
+  -i input.bam \
+  -s sample1 \
+  -o output_dir
+```
 
-Convert aligned data to signal tracks:
+### Fragments to BedGraph Signal
+```bash
+./create_signal_tracks/fragments_to_bed_scores.sh \
+  -i fragments.bed.gz \
+  -s sample1 \
+  -g genome.chrom.sizes \
+  -o output_dir
+```
+
+### RAMPAGE-seq BAM to TSS Signal
+```bash
+./create_signal_tracks/bam_to_bed_RAMPAGE_5prime.sh \
+  -i rampage.bam \
+  -s sample1 \
+  -g genome.chrom.sizes \
+  -o output_dir
+```
+
+## 3. Alignment and Peak Calling (`alignment_and_peak_call/`)
+
+### MACS2 Peak Calling with Pseudo-replicates
+```bash
+./alignment_and_peak_call/macs2_peak_call_from_fragment.sh \
+  -i fragments.bed.gz \
+  -s sample1 \
+  -b blacklist.bed \
+  -o output_dir
+```
+
+## 4. Motif Enrichment (`motif_enrichment/`)
+
+### MEME SEA Motif Analysis
+```bash
+./motif_enrichment/meme_run_sea.sh \
+  -p peaks.bed.gz \
+  -m motifs.meme \
+  -g genome.fa \
+  -b background.bed \
+  -n sample1 \
+  -o output_dir
+```
+
+## Legacy WDL Workflows
+
+The original WDL workflows are still available for cloud-based execution:
 
 ### ATAC-seq Processing
 - **`bam_to_bed_ATAC.wdl`**: Convert ATAC-seq BAM to fragments file
@@ -43,11 +122,55 @@ Convert aligned data to signal tracks:
 - **`bam_to_bed_RAMPAGE_5PRIME.wdl`**: Convert RAMPAGE BAM to 5' TSS positions
 - Creates scaled bedGraph signal files for transcription start sites
 
-## 4. Motif Enrichment (`motif_enrichment/`)
-
-Transcription factor motif analysis:
-- Compute motif enrichments using MEME SEA
+### Motif Enrichment
+- **`meme_run_sea.wdl`**: Compute motif enrichments using MEME SEA
 - Uses consensus motifs from Vierstra et al. 2020
+
+## Dependencies
+
+The general-use scripts require the following tools to be installed:
+
+### Core Dependencies
+- **samtools** (≥1.10): BAM file processing
+- **bedtools** (≥2.27): Genomic interval operations
+- **awk, sort, gzip**: Standard Unix tools
+
+### Specific Dependencies
+- **MACS2**: Peak calling (`pip install MACS2`)
+- **MEME Suite**: Motif analysis (`meme-suite.org`)
+- **SRA Toolkit**: FASTQ downloads (`ncbi.nlm.nih.gov/sra/docs/toolkitsoft`)
+- **pigz**: Fast compression (optional, for SRA downloads)
+- **wget**: File downloads
+- **python3**: Required for peak merging scripts
+
+### Docker Alternative
+For exact WDL environment compatibility, the scripts can be run using the same Docker images:
+- `njaved/samtools_bedtools`: General processing
+- `fooliu/macs2`: Peak calling
+- `memesuite/memesuite:5.4.1`: Motif analysis
+- `njaved/sra-tools-ubuntu:latest`: SRA downloads
+
+## Output Formats
+
+### For TensorFlow (TFRecord)
+The processed data can be converted to TensorFlow TFRecord format using the `write_TF_records/` utilities for training the original EpiBERT models.
+
+### For PyTorch Lightning
+The processed data can be converted to HDF5 format for use with the Lightning implementation. See `lightning_transfer/` for PyTorch-compatible data loading.
+
+## Reference Files
+
+You will need the following reference files:
+- **Genome FASTA**: Reference genome sequence (e.g., hg38.fa)
+- **Chromosome sizes**: Tab-delimited chr\tsize file (e.g., hg38.chrom.sizes)
+- **Blacklist regions**: ENCODE blacklist BED file for peak filtering
+- **Motif database**: MEME format motif database (e.g., JASPAR, HOCOMOCO)
+- **Background peaks**: Accessible genomic regions for motif enrichment
+
+These can be downloaded from:
+- ENCODE: `encode-public.s3.amazonaws.com`
+- UCSC Genome Browser: `hgdownload.cse.ucsc.edu`
+- JASPAR: `jaspar.genereg.net`
 - Generates motif activity scores for model input
 
 ## 5. TFRecord Generation (`write_TF_records/`)

@@ -1,0 +1,31 @@
+# EpiBERT Data Processing Pipeline Configuration
+# Example configuration file for processing ATAC-seq and RAMPAGE-seq data
+
+# Sample identification
+sample_id: "example_sample"
+
+# Data download (optional - specify if downloading from public repositories)
+# encode_accessions: "ENCFF123ABC,ENCFF456DEF"  # Comma-separated ENCODE accession IDs
+# sra_accessions: "SRR123456,SRR789012"        # Comma-separated SRA run IDs
+
+# ATAC-seq processing (required for ATAC analysis)
+atac_bam: "/path/to/atac_seq.bam"             # Input ATAC-seq BAM file
+
+# RAMPAGE-seq processing (required for RAMPAGE analysis)
+rampage_bam: "/path/to/rampage_seq.bam"       # Input RAMPAGE-seq BAM file
+rampage_scale_factor: 2.0                     # Scaling factor for paired-end data
+
+# Peak calling (required for peak analysis)
+blacklist: "/path/to/hg38.blacklist.bed"     # Blacklist regions (ENCODE blacklist)
+
+# Motif enrichment analysis (required for motif analysis)
+motif_database: "/path/to/motifs.meme"       # MEME format motif database
+background_peaks: "/path/to/background.bed"  # Background accessible regions
+
+# Reference genome files (required)
+genome_fasta: "/path/to/hg38.fa"             # Reference genome FASTA
+genome_sizes: "/path/to/hg38.chrom.sizes"    # Chromosome sizes file
+
+# Processing parameters (optional)
+# threads: 4                                 # Number of threads to use
+# output_dir: "./epibert_data"               # Output directory
