@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch Lightning checkpoints
+checkpoints/
+lightning_logs/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyTorch models
+*.pth
+*.pt
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
