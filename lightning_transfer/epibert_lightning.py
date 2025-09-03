@@ -2,8 +2,7 @@
 EpiBERT PyTorch Lightning Implementation
 
 This demonstrates how the TensorFlow-based EpiBERT model could be structured
-in PyTorch Lightning. This is a structural example showing the key components
-and training loop organization.
+in PyTorch Lightning, using the transferred utilities from the original implementation.
 """
 
 import torch
@@ -16,44 +15,19 @@ import torchmetrics
 from typing import Dict, Any, Optional, List, Tuple
 import math
 
-
-class RotaryPositionalEmbedding(nn.Module):
-    """Rotary Positional Embedding implementation in PyTorch"""
-    
-    def __init__(self, dim: int, max_seq_len: int = 4096):
-        super().__init__()
-        self.dim = dim
-        self.max_seq_len = max_seq_len
-        
-        # Precompute the rotary embedding
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
-        self.register_buffer('inv_freq', inv_freq)
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        seq_len = x.shape[-2]
-        t = torch.arange(seq_len, device=x.device).type_as(self.inv_freq)
-        freqs = torch.einsum('i,j->ij', t, self.inv_freq)
-        emb = torch.cat((freqs, freqs), dim=-1)
-        return emb[:seq_len]
-
-
-class SoftmaxPooling1D(nn.Module):
-    """Softmax-based pooling layer (equivalent to TensorFlow implementation)"""
-    
-    def __init__(self, kernel_size: int = 2):
-        super().__init__()
-        self.kernel_size = kernel_size
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: (batch, channels, length)
-        batch_size, channels, length = x.shape
-        
-        # Reshape for pooling
-        x = x.view(batch_size, channels, -1, self.kernel_size)
-        weights = F.softmax(x, dim=-1)
-        pooled = torch.sum(x * weights, dim=-1)
-        
-        return pooled
+# Import our transferred utilities
+from .utils import (
+    sinusoidal_positional_encoding, 
+    RotaryPositionalEmbedding, 
+    SoftmaxPooling1D,
+    gen_channels_list,
+    exponential_linspace_int
+)
+from .metrics import PearsonR, R2Score, MetricDict
+from .losses import create_multitask_loss, PoissonMultinomialLoss
+from .optimizers import create_adafactor_optimizer, create_adamw_optimizer
+from .schedulers import create_cosine_warmup_scheduler
+from .training_utils import EpiBERTTrainingMixin
 
 
 class ConvBlock(nn.Module):
@@ -202,12 +176,12 @@ class TransformerBlock(nn.Module):
         return x
 
 
-class EpiBERTLightning(pl.LightningModule):
+class EpiBERTLightning(pl.LightningModule, EpiBERTTrainingMixin):
     """
     EpiBERT PyTorch Lightning Module
     
     This demonstrates how the TensorFlow EpiBERT model could be structured
-    in PyTorch Lightning, maintaining the same architectural principles.
+    in PyTorch Lightning, using the transferred utilities from the original implementation.
     """
     
     def __init__(self,
@@ -246,11 +220,8 @@ class EpiBERTLightning(pl.LightningModule):
         # Build model components
         self._build_model()
         
-        # Initialize metrics
-        self.train_pearson = torchmetrics.PearsonCorrCoef()
-        self.val_pearson = torchmetrics.PearsonCorrCoef()
-        self.train_r2 = torchmetrics.R2Score()
-        self.val_r2 = torchmetrics.R2Score()
+        # Initialize metrics using our transferred utilities
+        self.metrics = self.setup_metrics(predict_atac=True, unmask_loss=False)
         
     def _build_model(self):
         """Build the EpiBERT model architecture"""
@@ -365,7 +336,7 @@ class EpiBERTLightning(pl.LightningModule):
         return output
         
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
-        """Training step"""
+        """Training step using transferred utilities"""
         sequence = batch['sequence']
         atac = batch['atac'] 
         target = batch['target']
@@ -375,36 +346,24 @@ class EpiBERTLightning(pl.LightningModule):
         # Forward pass
         predictions = self(sequence, atac, motif_activity)
         
-        # Calculate loss (Poisson loss for count data)
-        if mask is not None:
-            # Apply mask to focus on specific regions
-            predictions = predictions * mask.unsqueeze(-1)
-            target = target * mask.unsqueeze(-1)
-            
-        loss = F.poisson_nll_loss(predictions.squeeze(-1), target, log_input=False)
+        # Prepare data for loss computation using transferred utilities
+        pred_dict = {'atac': predictions}
+        target_dict = {'atac': target}
+        mask_dict = {'atac': mask} if mask is not None else None
         
-        # Calculate metrics
-        pred_flat = predictions.view(-1)
-        target_flat = target.view(-1)
+        # Compute loss using transferred utilities
+        losses = self.compute_loss(pred_dict, target_dict, mask_dict)
         
-        # Only calculate metrics on valid (non-masked) positions
-        if mask is not None:
-            valid_mask = mask.view(-1) > 0
-            pred_flat = pred_flat[valid_mask]
-            target_flat = target_flat[valid_mask]
-            
-        train_pearson = self.train_pearson(pred_flat, target_flat)
-        train_r2 = self.train_r2(pred_flat, target_flat)
+        # Update metrics using transferred utilities
+        self.update_metrics(pred_dict, target_dict, losses, self.metrics, 'train', mask_dict)
         
         # Log metrics
-        self.log('train_loss', loss, prog_bar=True)
-        self.log('train_pearson', train_pearson, prog_bar=True)
-        self.log('train_r2', train_r2)
+        self.log('train_loss', losses['total'], prog_bar=True)
         
-        return loss
+        return losses['total']
         
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
-        """Validation step"""
+        """Validation step using transferred utilities"""
         sequence = batch['sequence']
         atac = batch['atac']
         target = batch['target'] 
@@ -414,50 +373,47 @@ class EpiBERTLightning(pl.LightningModule):
         # Forward pass
         predictions = self(sequence, atac, motif_activity)
         
-        # Calculate loss
-        if mask is not None:
-            predictions = predictions * mask.unsqueeze(-1)
-            target = target * mask.unsqueeze(-1)
-            
-        val_loss = F.poisson_nll_loss(predictions.squeeze(-1), target, log_input=False)
+        # Prepare data for loss computation using transferred utilities
+        pred_dict = {'atac': predictions}
+        target_dict = {'atac': target}
+        mask_dict = {'atac': mask} if mask is not None else None
         
-        # Calculate metrics
-        pred_flat = predictions.view(-1)
-        target_flat = target.view(-1)
+        # Compute loss using transferred utilities
+        losses = self.compute_loss(pred_dict, target_dict, mask_dict)
         
-        if mask is not None:
-            valid_mask = mask.view(-1) > 0
-            pred_flat = pred_flat[valid_mask]
-            target_flat = target_flat[valid_mask]
-            
-        val_pearson = self.val_pearson(pred_flat, target_flat)
-        val_r2 = self.val_r2(pred_flat, target_flat)
+        # Update metrics using transferred utilities
+        self.update_metrics(pred_dict, target_dict, losses, self.metrics, 'val', mask_dict)
         
         # Log metrics
-        self.log('val_loss', val_loss, prog_bar=True, sync_dist=True)
-        self.log('val_pearson', val_pearson, prog_bar=True, sync_dist=True)
-        self.log('val_r2', val_r2, sync_dist=True)
+        self.log('val_loss', losses['total'], prog_bar=True, sync_dist=True)
         
-        return val_loss
+        return losses['total']
         
     def configure_optimizers(self):
-        """Configure optimizer and learning rate scheduler"""
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=0.01,
-            eps=1e-8
-        )
+        """Configure optimizer and learning rate scheduler using transferred utilities"""
+        # Use our transferred Adafactor optimizer (or AdamW as fallback)
+        try:
+            optimizer = create_adafactor_optimizer(
+                self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=0.01
+            )
+        except:
+            # Fallback to AdamW if Adafactor has issues
+            optimizer = create_adamw_optimizer(
+                self.parameters(),
+                learning_rate=self.learning_rate,
+                weight_decay=0.01
+            )
         
-        # Cosine annealing with warmup (similar to original)
-        def lr_lambda(step):
-            if step < self.warmup_steps:
-                return step / self.warmup_steps
-            else:
-                progress = (step - self.warmup_steps) / (self.total_steps - self.warmup_steps)
-                return 0.5 * (1 + math.cos(math.pi * progress))
-                
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+        # Use our transferred cosine warmup scheduler
+        scheduler = create_cosine_warmup_scheduler(
+            optimizer=optimizer,
+            warmup_steps=self.warmup_steps,
+            decay_steps=self.total_steps - self.warmup_steps,
+            target_lr=self.learning_rate,
+            alpha=0.0
+        )
         
         return {
             'optimizer': optimizer,
