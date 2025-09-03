@@ -206,30 +206,79 @@ class EpiBERTLightning(pl.LightningModule):
     """
     EpiBERT PyTorch Lightning Module
     
-    This demonstrates how the TensorFlow EpiBERT model could be structured
-    in PyTorch Lightning, maintaining the same architectural principles.
+    This implements the TensorFlow EpiBERT model in PyTorch Lightning,
+    maintaining exact parameter compatibility with the original models.
+    
+    Args:
+        model_type: Either "pretraining" or "finetuning". This automatically sets
+                   the correct parameters to match the original TensorFlow models:
+                   - "pretraining": Matches epibert_atac_pretrain.py (8 heads, 8 layers, etc.)
+                   - "finetuning": Matches epibert_rampage_finetune.py (4 heads, 7 layers, etc.)
+        input_length: Length of input sequence (default: 524288)
+        output_length: Length of output tensor before cropping (default: 4096)
+        final_output_length: Length of final output after cropping (default: 4092)
+        num_heads: Number of attention heads (auto-set based on model_type)
+        num_transformer_layers: Number of transformer layers (auto-set based on model_type)
+        d_model: Model dimension (auto-set based on model_type)
+        filter_list_seq: Convolutional filter sizes for sequence processing (auto-set based on model_type)
+        filter_list_atac: Convolutional filter sizes for ATAC processing
+        num_motifs: Number of motif inputs (default: 693)
+        dropout_rate: Dropout rate for transformer layers (auto-set based on model_type)
+        pointwise_dropout_rate: Dropout rate for pointwise convolutions (auto-set based on model_type)
+        motif_dropout_rate: Dropout rate for motif activity layer (default: 0.25)
+        motif_units_fc: Units in motif fully connected layer (default: 32)
+        learning_rate: Learning rate for optimizer
+        warmup_steps: Number of warmup steps for learning rate scheduler
+        total_steps: Total number of training steps
     """
     
     def __init__(self,
                  input_length: int = 524288,
                  output_length: int = 4096,
+                 final_output_length: int = 4092,
                  num_heads: int = 8,
                  num_transformer_layers: int = 8,
                  d_model: int = 1024,
                  filter_list_seq: List[int] = [512, 640, 640, 768, 896, 1024],
                  filter_list_atac: List[int] = [32, 64],
                  num_motifs: int = 693,
-                 dropout_rate: float = 0.2,
+                 dropout_rate: float = 0.20,
+                 pointwise_dropout_rate: float = 0.10,
+                 motif_dropout_rate: float = 0.25,
+                 motif_units_fc: int = 32,
+                 model_type: str = "pretraining",  # "pretraining" or "finetuning"
                  learning_rate: float = 1e-4,
                  warmup_steps: int = 1000,
                  total_steps: int = 100000,
                  **kwargs):
         super().__init__()
+        
+        # Apply model-specific parameter overrides based on original TensorFlow models
+        if model_type == "finetuning":
+            # Match epibert_rampage_finetune.py parameters exactly
+            num_heads = 4
+            num_transformer_layers = 7 
+            dropout_rate = 0.2
+            pointwise_dropout_rate = 0.2
+            filter_list_seq = [768, 896, 1024, 1024, 1152, 1280]
+            d_model = filter_list_seq[-1]  # 1280
+        elif model_type == "pretraining":
+            # Match epibert_atac_pretrain.py parameters exactly  
+            num_heads = 8
+            num_transformer_layers = 8
+            dropout_rate = 0.20
+            pointwise_dropout_rate = 0.10
+            filter_list_seq = [512, 640, 640, 768, 896, 1024]
+            d_model = filter_list_seq[-1]  # 1024
+        else:
+            raise ValueError(f"model_type must be 'pretraining' or 'finetuning', got {model_type}")
+            
         self.save_hyperparameters()
         
         # Model architecture parameters
         self.input_length = input_length
         self.output_length = output_length
+        self.final_output_length = final_output_length
         self.num_heads = num_heads
         self.num_transformer_layers = num_transformer_layers
         self.d_model = d_model
@@ -237,6 +286,10 @@ class EpiBERTLightning(pl.LightningModule):
         self.filter_list_atac = filter_list_atac
         self.num_motifs = num_motifs
         self.dropout_rate = dropout_rate
+        self.pointwise_dropout_rate = pointwise_dropout_rate
+        self.motif_dropout_rate = motif_dropout_rate
+        self.motif_units_fc = motif_units_fc
+        self.model_type = model_type
         
         # Training parameters
         self.learning_rate = learning_rate
@@ -519,15 +572,17 @@ def create_trainer(max_epochs: int = 100,
 
 
 if __name__ == "__main__":
-    # Example usage
-    model = EpiBERTLightning(
-        input_length=524288,
-        output_length=4096,
-        num_heads=8,
-        num_transformer_layers=8,
-        learning_rate=1e-4
-    )
+    # Example usage - Pretraining model
+    print("=== EpiBERT Pretraining Model ===")
+    model_pretrain = EpiBERTLightning(model_type="pretraining")
+    print(f"Pretraining model: {model_pretrain.num_heads} heads, {model_pretrain.num_transformer_layers} layers")
+    print(f"d_model: {model_pretrain.d_model}, dropout: {model_pretrain.dropout_rate}")
+    print(f"Filter list: {model_pretrain.filter_list_seq}")
+    print(f"Parameters: {sum(p.numel() for p in model_pretrain.parameters()):,}")
     
-    # Print model summary
-    print(f"Model has {sum(p.numel() for p in model.parameters()):,} parameters")
-    print(f"Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    print("\n=== EpiBERT Fine-tuning Model ===")
+    model_finetune = EpiBERTLightning(model_type="finetuning")
+    print(f"Fine-tuning model: {model_finetune.num_heads} heads, {model_finetune.num_transformer_layers} layers")
+    print(f"d_model: {model_finetune.d_model}, dropout: {model_finetune.dropout_rate}")
+    print(f"Filter list: {model_finetune.filter_list_seq}")
+    print(f"Parameters: {sum(p.numel() for p in model_finetune.parameters()):,}")

@@ -22,15 +22,12 @@ python train_lightning.py \
     --checkpoint_dir="$OUTPUT_DIR" \
     --project_name="$PROJECT_NAME" \
     --run_name="pretraining-$(date +%Y%m%d-%H%M%S)" \
+    --model_type="pretraining" \
     --input_length=524288 \
     --output_length=4096 \
     --batch_size=1 \
     --gpus=$GPUS \
     --precision="16-mixed" \
-    --num_transformer_layers=8 \
-    --num_heads=4 \
-    --d_model=1024 \
-    --dropout_rate=0.20 \
     --learning_rate=1e-4 \
     --warmup_steps=5000 \
     --total_steps=500000 \

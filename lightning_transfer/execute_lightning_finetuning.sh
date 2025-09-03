@@ -25,15 +25,12 @@ python train_lightning.py \
     --project_name="$PROJECT_NAME" \
     --run_name="finetuning-$(date +%Y%m%d-%H%M%S)" \
     --resume_from_checkpoint="$PRETRAINED_CHECKPOINT" \
+    --model_type="finetuning" \
     --input_length=524288 \
     --output_length=4096 \
     --batch_size=1 \
     --gpus=$GPUS \
     --precision="16-mixed" \
-    --num_transformer_layers=8 \
-    --num_heads=8 \
-    --d_model=1024 \
-    --dropout_rate=0.20 \
     --learning_rate=5e-4 \
     --warmup_steps=5000 \
     --total_steps=500000 \
