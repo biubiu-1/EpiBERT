@@ -15,6 +15,7 @@ from pytorch_lightning.loggers import WandbLogger
 import torchmetrics
 from typing import Dict, Any, Optional, List, Tuple
 import math
+import os
 
 
 class RotaryPositionalEmbedding(nn.Module):
@@ -520,6 +521,193 @@ class EpiBERTLightning(pl.LightningModule):
                 'frequency': 1
             }
         }
+    
+    def load_tensorflow_weights(self, 
+                               tf_checkpoint_path: str,
+                               strict: bool = False,
+                               verbose: bool = True) -> Dict[str, Any]:
+        """
+        Load weights from TensorFlow checkpoint
+        
+        Args:
+            tf_checkpoint_path: Path to TensorFlow checkpoint file
+            strict: Whether to require exact parameter matching
+            verbose: Whether to print loading details
+            
+        Returns:
+            Dictionary with loading statistics and any issues
+        """
+        try:
+            # Import the converter (local import to avoid import issues)
+            import sys
+            import os
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+            from tf_to_pytorch_converter import load_tensorflow_weights_to_pytorch
+            
+            if verbose:
+                print(f"Loading TensorFlow weights from: {tf_checkpoint_path}")
+                print(f"Model type: {self.model_type}")
+                
+            stats = load_tensorflow_weights_to_pytorch(
+                self, 
+                tf_checkpoint_path, 
+                self.model_type,
+                strict=strict
+            )
+            
+            if verbose:
+                print(f"Successfully loaded weights: {stats}")
+                if stats.get('missing_keys'):
+                    print(f"Missing keys: {stats['missing_keys']}")
+                if stats.get('unexpected_keys'):
+                    print(f"Unexpected keys: {stats['unexpected_keys']}")
+                    
+            return stats
+            
+        except Exception as e:
+            print(f"Error loading TensorFlow weights: {e}")
+            return {'error': str(e), 'loaded_successfully': False}
+    
+    def save_pytorch_checkpoint(self, path: str, include_optimizer: bool = True):
+        """
+        Save model weights in PyTorch format
+        
+        Args:
+            path: Output path for checkpoint
+            include_optimizer: Whether to include optimizer state
+        """
+        checkpoint = {
+            'state_dict': self.state_dict(),
+            'model_config': {
+                'model_type': self.model_type,
+                'input_length': self.input_length,
+                'output_length': self.output_length,
+                'final_output_length': self.final_output_length,
+                'num_heads': self.num_heads,
+                'num_transformer_layers': self.num_transformer_layers,
+                'd_model': self.d_model,
+                'filter_list_seq': self.filter_list_seq,
+                'filter_list_atac': self.filter_list_atac,
+                'dropout_rate': self.dropout_rate,
+                'pointwise_dropout_rate': self.pointwise_dropout_rate,
+                'num_motifs': self.num_motifs
+            },
+            'training_config': {
+                'learning_rate': self.learning_rate,
+                'warmup_steps': self.warmup_steps,
+                'total_steps': self.total_steps
+            }
+        }
+        
+        if include_optimizer and hasattr(self, 'optimizers'):
+            opt = self.optimizers()
+            if opt is not None:
+                checkpoint['optimizer_state_dict'] = opt.state_dict()
+                
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        torch.save(checkpoint, path)
+        print(f"Saved PyTorch checkpoint: {path}")
+        
+    @classmethod
+    def load_from_pytorch_checkpoint(cls, 
+                                   checkpoint_path: str,
+                                   map_location: str = 'cpu') -> 'EpiBERTLightning':
+        """
+        Load model from PyTorch checkpoint
+        
+        Args:
+            checkpoint_path: Path to PyTorch checkpoint
+            map_location: Device to load checkpoint on
+            
+        Returns:
+            EpiBERTLightning model with loaded weights
+        """
+        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+        
+        # Extract model configuration
+        model_config = checkpoint.get('model_config', {})
+        
+        # Create model with saved configuration
+        model = cls(**model_config)
+        
+        # Load state dict
+        if 'state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            print("Warning: No state_dict found in checkpoint")
+            
+        print(f"Loaded model from {checkpoint_path}")
+        print(f"Model configuration: {model_config}")
+        
+        return model
+        
+    def validate_weights_against_tensorflow(self, 
+                                          tf_checkpoint_path: str,
+                                          tolerance: float = 1e-5) -> Dict[str, Any]:
+        """
+        Validate that loaded weights match TensorFlow checkpoint
+        
+        Args:
+            tf_checkpoint_path: Path to original TensorFlow checkpoint
+            tolerance: Numerical tolerance for weight comparison
+            
+        Returns:
+            Validation results
+        """
+        try:
+            # Import converter utilities
+            import sys
+            import os
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+            from tf_to_pytorch_converter import TensorFlowToPyTorchConverter
+            
+            converter = TensorFlowToPyTorchConverter(self.model_type)
+            tf_weights = converter._load_tf_checkpoint(tf_checkpoint_path)
+            
+            validation_results = {
+                'total_tf_params': len(tf_weights),
+                'total_pytorch_params': len(list(self.parameters())),
+                'matched_params': 0,
+                'weight_differences': [],
+                'missing_in_pytorch': [],
+                'extra_in_pytorch': [],
+                'validation_passed': True
+            }
+            
+            # Convert TF weights for comparison
+            converted_weights = converter._convert_weights(tf_weights)
+            pytorch_state = self.state_dict()
+            
+            # Compare weights
+            for name, tf_weight in converted_weights.items():
+                if name in pytorch_state:
+                    pytorch_weight = pytorch_state[name]
+                    
+                    if tf_weight.shape == pytorch_weight.shape:
+                        diff = torch.abs(tf_weight - pytorch_weight).max().item()
+                        validation_results['weight_differences'].append((name, diff))
+                        
+                        if diff > tolerance:
+                            validation_results['validation_passed'] = False
+                            
+                        validation_results['matched_params'] += 1
+                    else:
+                        validation_results['validation_passed'] = False
+                        print(f"Shape mismatch for {name}: TF {tf_weight.shape} vs PyTorch {pytorch_weight.shape}")
+                else:
+                    validation_results['missing_in_pytorch'].append(name)
+                    
+            # Check for extra parameters in PyTorch
+            for name in pytorch_state.keys():
+                if name not in converted_weights:
+                    validation_results['extra_in_pytorch'].append(name)
+                    
+            return validation_results
+            
+        except Exception as e:
+            return {'error': str(e), 'validation_passed': False}
 
 
 def create_trainer(max_epochs: int = 100,
