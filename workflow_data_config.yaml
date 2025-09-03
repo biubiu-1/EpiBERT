@@ -1,0 +1,21 @@
+# EpiBERT Data Processing Configuration
+input:
+  sample_name: "example_sample"
+  atac_bam: "data/raw/sample.atac.bam"
+  rampage_bam: "data/raw/sample.rampage.bam"  # optional
+
+reference:
+  genome_fasta: "reference/hg38.fa"
+  chrom_sizes: "reference/hg38.chrom.sizes"
+  blacklist: "reference/hg38-blacklist.v2.bed"
+  motif_database: "reference/JASPAR2022_CORE_vertebrates.meme"
+
+output:
+  base_dir: "data/processed"
+  
+processing:
+  peak_calling:
+    qvalue: 0.01
+  signal_tracks:
+    bin_size: 128
+    normalize: true
