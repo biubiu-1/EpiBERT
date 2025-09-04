@@ -1,0 +1,25 @@
+# EpiBERT Training Configuration
+data:
+  train_data: "data/processed/train"
+  valid_data: "data/processed/valid"
+  test_data: "data/processed/test"
+
+model:
+  type: "pretraining"
+  input_length: 524288
+  output_length: 4096
+
+training:
+  batch_size: 4
+  learning_rate: 0.0001
+  max_epochs: 100
+  patience: 10
+
+logging:
+  wandb_project: "epibert"
+  log_dir: "logs"
+
+hardware:
+  num_gpus: 1
+  num_workers: 4
+  precision: "bf16"

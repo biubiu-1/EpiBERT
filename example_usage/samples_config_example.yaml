@@ -1,0 +1,78 @@
+# Example Sample Configuration for PyTorch Dataset Generation
+#
+# This file demonstrates how to configure multiple samples for batch
+# processing with the PyTorch dataset generator.
+#
+# Usage:
+#   python scripts/generate_pytorch_dataset.py --samples-config samples_config_example.yaml \
+#     --output-dir datasets/ --genome-fasta hg38.fa --genome-sizes hg38.sizes
+
+samples:
+  # Sample 1: Treatment condition with full data
+  - sample_id: GM12878_treatment_rep1
+    atac_file: /path/to/GM12878_treatment_rep1_atac.bedgraph
+    rampage_file: /path/to/GM12878_treatment_rep1_rampage.bedgraph
+    peaks_file: /path/to/GM12878_treatment_rep1_peaks.bed
+    motif_file: /path/to/GM12878_treatment_rep1_motifs.txt
+    condition: treatment
+    replicate: 1
+    cell_type: GM12878
+    
+  # Sample 2: Treatment condition replicate 2
+  - sample_id: GM12878_treatment_rep2
+    atac_file: /path/to/GM12878_treatment_rep2_atac.bedgraph
+    rampage_file: /path/to/GM12878_treatment_rep2_rampage.bedgraph
+    peaks_file: /path/to/GM12878_treatment_rep2_peaks.bed
+    condition: treatment
+    replicate: 2
+    cell_type: GM12878
+    
+  # Sample 3: Control condition with BigWig files
+  - sample_id: GM12878_control_rep1
+    atac_file: /path/to/GM12878_control_rep1_atac.bw
+    rampage_file: /path/to/GM12878_control_rep1_rampage.bw
+    peaks_file: /path/to/GM12878_control_rep1_peaks.bed
+    condition: control
+    replicate: 1
+    cell_type: GM12878
+    
+  # Sample 4: Control condition replicate 2
+  - sample_id: GM12878_control_rep2
+    atac_file: /path/to/GM12878_control_rep2_atac.bw
+    rampage_file: /path/to/GM12878_control_rep2_rampage.bw
+    peaks_file: /path/to/GM12878_control_rep2_peaks.bed
+    condition: control
+    replicate: 2
+    cell_type: GM12878
+    
+  # Sample 5: Different cell type - K562 treatment
+  - sample_id: K562_treatment_rep1
+    atac_file: /path/to/K562_treatment_rep1_atac.bedgraph
+    rampage_file: /path/to/K562_treatment_rep1_rampage.bedgraph
+    peaks_file: /path/to/K562_treatment_rep1_peaks.bed
+    condition: treatment
+    replicate: 1
+    cell_type: K562
+    
+  # Sample 6: K562 control
+  - sample_id: K562_control_rep1
+    atac_file: /path/to/K562_control_rep1_atac.bedgraph
+    rampage_file: /path/to/K562_control_rep1_rampage.bedgraph  
+    peaks_file: /path/to/K562_control_rep1_peaks.bed
+    condition: control
+    replicate: 1
+    cell_type: K562
+
+# Optional: Global settings that apply to all samples
+global_settings:
+  sequence_length: 524288
+  output_length: 4096
+  resolution: 128
+  motif_features: 693
+  
+# Optional: Custom regions to process (if not specified, uses tiled genome)
+# regions_bed: /path/to/custom_regions.bed
+
+# Optional: Reference files (can also be specified via command line)
+# genome_fasta: /path/to/hg38.fa
+# genome_sizes: /path/to/hg38.chrom.sizes

@@ -33,18 +33,29 @@ def main():
                        help='Number of data loading workers')
     
     # Model arguments
+    parser.add_argument('--model_type', type=str, default='pretraining',
+                       choices=['pretraining', 'finetuning'],
+                       help='Model type: pretraining or finetuning (auto-sets parameters)')
     parser.add_argument('--input_length', type=int, default=524288,
                        help='Length of input sequence')
     parser.add_argument('--output_length', type=int, default=4096,
                        help='Length of output profile')
-    parser.add_argument('--num_heads', type=int, default=8,
-                       help='Number of attention heads')
-    parser.add_argument('--num_transformer_layers', type=int, default=8,
-                       help='Number of transformer layers')
-    parser.add_argument('--d_model', type=int, default=1024,
-                       help='Model dimension')
-    parser.add_argument('--dropout_rate', type=float, default=0.2,
-                       help='Dropout rate')
+    parser.add_argument('--final_output_length', type=int, default=4092,
+                       help='Length of final output after cropping')
+    parser.add_argument('--num_heads', type=int, default=None,
+                       help='Number of attention heads (auto-set if not specified)')
+    parser.add_argument('--num_transformer_layers', type=int, default=None,
+                       help='Number of transformer layers (auto-set if not specified)')
+    parser.add_argument('--d_model', type=int, default=None,
+                       help='Model dimension (auto-set if not specified)')
+    parser.add_argument('--dropout_rate', type=float, default=None,
+                       help='Dropout rate (auto-set if not specified)')
+    parser.add_argument('--pointwise_dropout_rate', type=float, default=None,
+                       help='Pointwise dropout rate (auto-set if not specified)')
+    parser.add_argument('--motif_dropout_rate', type=float, default=0.25,
+                       help='Motif dropout rate')
+    parser.add_argument('--motif_units_fc', type=int, default=32,
+                       help='Motif FC units')
     
     # Training arguments
     parser.add_argument('--learning_rate', type=float, default=1e-4,
@@ -90,18 +101,32 @@ def main():
         output_length=args.output_length
     )
     
-    # Set up model
-    model = EpiBERTLightning(
-        input_length=args.input_length,
-        output_length=args.output_length,
-        num_heads=args.num_heads,
-        num_transformer_layers=args.num_transformer_layers,
-        d_model=args.d_model,
-        dropout_rate=args.dropout_rate,
-        learning_rate=args.learning_rate,
-        warmup_steps=args.warmup_steps,
-        total_steps=args.total_steps
-    )
+    # Set up model - only pass non-None parameters to allow auto-setting
+    model_kwargs = {
+        'model_type': args.model_type,
+        'input_length': args.input_length,
+        'output_length': args.output_length,
+        'final_output_length': args.final_output_length,
+        'motif_dropout_rate': args.motif_dropout_rate,
+        'motif_units_fc': args.motif_units_fc,
+        'learning_rate': args.learning_rate,
+        'warmup_steps': args.warmup_steps,
+        'total_steps': args.total_steps
+    }
+    
+    # Only add parameters if they were explicitly specified
+    if args.num_heads is not None:
+        model_kwargs['num_heads'] = args.num_heads
+    if args.num_transformer_layers is not None:
+        model_kwargs['num_transformer_layers'] = args.num_transformer_layers
+    if args.d_model is not None:
+        model_kwargs['d_model'] = args.d_model
+    if args.dropout_rate is not None:
+        model_kwargs['dropout_rate'] = args.dropout_rate
+    if args.pointwise_dropout_rate is not None:
+        model_kwargs['pointwise_dropout_rate'] = args.pointwise_dropout_rate
+    
+    model = EpiBERTLightning(**model_kwargs)
     
     # Set up callbacks
     checkpoint_callback = ModelCheckpoint(

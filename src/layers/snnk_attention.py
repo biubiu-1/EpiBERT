@@ -349,7 +349,8 @@ def favor_attention(query,
         av_attention = noncausal_numerator(query_prime, key_prime, value)
         attention_normalizer = noncausal_denominator(query_prime, key_prime)
 
-  # TODO(kchoro): Add more comments.
+  # Transform attention outputs from [L,B,H,D] to [B,L,H,D] format
+  # and normalize by attention weights for final output computation
     av_attention = tf.transpose(av_attention, [1, 0, 2, 3])
     #print("avattn", av_attention.shape)
     attention_normalizer = tf.transpose(attention_normalizer, [1, 0, 2])

@@ -1,0 +1,37 @@
+# EpiBERT Data Processing Configuration Example
+# Copy and modify this file for your data processing
+
+# Input data
+input:
+  sample_name: "example_sample"
+  atac_bam: "data/raw/sample.atac.bam"
+  rampage_bam: "data/raw/sample.rampage.bam"  # optional, for fine-tuning
+  
+# Reference files
+reference:
+  genome_fasta: "reference/hg38.fa"
+  chrom_sizes: "reference/hg38.chrom.sizes"
+  blacklist: "reference/blacklist.bed"
+  motif_database: "reference/motifs.meme"
+  
+# Output directories
+output:
+  base_dir: "data/processed"
+  fragments_dir: "fragments"
+  signals_dir: "signals"
+  peaks_dir: "peaks"
+  motifs_dir: "motifs"
+  
+# Processing parameters
+processing:
+  peak_calling:
+    qvalue: 0.01
+    shift: -75
+    extsize: 150
+  
+  signal_tracks:
+    bin_size: 128
+    normalize: true
+    
+  motif_analysis:
+    pvalue_threshold: 0.001

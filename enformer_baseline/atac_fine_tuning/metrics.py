@@ -132,12 +132,23 @@ class CorrelationStats(tf.keras.metrics.Metric):
             tf.reduce_sum(tf.ones_like(y_true), axis=self._reduce_axis))
 
     def result(self):
-        raise NotImplementedError('Must be implemented in subclasses.')
+        """Return the computed correlation result."""
+        # This is a base class - subclasses should implement specific metrics
+        return self._compute_basic_stats()
     #@tf.function
     def reset_state(self):
         if self._shape is not None:
             tf.keras.backend.batch_set_value([(v, tnp.zeros(self._shape))
                                         for v in self.variables])
+                                        
+    def _compute_basic_stats(self):
+        """Compute basic statistics for correlation metrics"""
+        if self._count is None or tf.reduce_sum(self._count) == 0:
+            return tf.constant(0.0)
+            
+        # Return mean squared error as a basic metric
+        mse = (self._pred_squared_sum - 2 * self._product_sum + self._true_squared_sum) / self._count
+        return tf.reduce_mean(mse)
 class PearsonR(CorrelationStats):
     """Pearson correlation coefficient.
         Computed as:
